@@ -2,9 +2,11 @@ Code Sketch
 
 
 Sweeping the Room:
-- 
+- a checker to determine when a wall is being approached and to signal a u-turn
+- a boolean flag to alternate the turn direction
 
 Charging:
-- A timer to signal that charging is needed (should be lower than 90s to allow time to reach charging station)
-- Keepers of the angle rotated and distance traveled so that they can be reversed when resuming
+- a timer to signal that charging is needed (should be lower than 90s to allow time to reach charging station)
+- a function to locate the drop-off zone
+- keepers of the angle rotated and distance traveled so that they can be reversed when resuming
 
