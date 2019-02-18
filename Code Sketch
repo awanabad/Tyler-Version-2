@@ -2,9 +2,9 @@ Code Sketch
 
 
 Sweeping the Room:
--
+- 
 
 Charging:
 - A timer to signal that charging is needed (should be lower than 90s to allow time to reach charging station)
-- 
+- Keepers of the angle rotated and distance traveled so that they can be reversed when resuming
 
