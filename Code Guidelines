@@ -1,0 +1,13 @@
+Code Guidelines
+
+
+Naming Convention: 
+- use uppercase letters to indicate a new word after the first word
+- examples: "turnSpeed" and "leftMotor"
+
+Comment Convention:
+- comment above the line so horizontal scrolling is unnecessary
+
+Spacing Convention:
+- leave one line between interior functions/sections
+- leave two lines between greater functions/sections like setup and loop
