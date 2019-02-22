@@ -4,6 +4,7 @@
 
 //dynamic variables
 unsigned long timer = 0;
+bool turnFlag;
 
 
 void setup() 
