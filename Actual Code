@@ -1,0 +1,42 @@
+//additional libraries
+//" "
+
+
+//dynamic variables
+unsigned long timer = 0;
+
+
+void setup() 
+{
+
+}
+
+
+void loop()
+{
+  
+}
+
+
+void driveStraight()
+{
+
+}
+
+
+void uTurn()
+{
+
+}
+
+
+void ping()
+{
+
+}
+
+
+void findBeacon()
+{
+
+}
