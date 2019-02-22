@@ -3,15 +3,16 @@
 
 
 //dynamic variables
-unsigned long timer = 0;
+unsigned long tempTimer = 0;
 unsigned long chargeTimer = 0;
 unsigned long angleKeeper = 0;
 unsigned long distanceKeeper = 0;
 bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa
 bool chargeFlag = false; //to reverse when dropping off parts
 bool foundBeacon = false; 
-unsigned int phaseA = 1;
-unsigned  int phaseB = 1;
+unsigned int phaseA = 1; //sweeping
+unsigned int phaseB = 1; //dumping
+unsigned int phaseC = 1; //resuming
 unsigned echo; //ultrasonic sensor
 const int forwardSpeed = 1800;
 const int reverseSpeed = 1300;
@@ -36,11 +37,11 @@ void loop()
     case 1: 
       ping();
       driveStraight(chargeFlag);
-      timer = millis(); //use if we are basing the turns on time
+      tempTimer = millis(); //use if we are basing the turns on time
       break;
     case 2:      
       uTurn(turnFlag);
-      if (millis - timer >= 1900) {phaseA = 1}; //set phaseA back to 1 after turning
+      if (millis - tempTimer >= 1900) {phaseA = 1}; //set phaseA back to 1 after turning
       break;
     case 3:
       chargeFlag = true;
@@ -48,6 +49,7 @@ void loop()
       break();
     case 4:
       resumeSweep();
+      break;
   }
 }
 
@@ -100,17 +102,31 @@ void findBeacon() // keep rotating on the spot until the beacon is found
       ping();
       distancekeeper = millis(); //record traverse time
       driveStraight(chargeFlag);
+      break;
     case 3:
       //set both motors to brake
       //dump parts off and reset
       phaseB = 1;
       chargeFlag = false;
       chargeTimer = millis();
+      tempTimer = millis();
+      phaseA = 4;
+      break;
   }
 }
  
  
 void resumeSweep()
 {
-
+  switch (phaseC)
+  {
+    case 1:
+      driveStraight(chargeFlag);
+      if (millis - timer >= distanceKeeper) {phaseC = 2};
+      break;
+    case 2: // must rotate opposite to findBeacon: case 2
+      //set left motor to reverseSlow
+      //set right motor to forwardSlow
+      if (millis - timer >= angleKeeper) {phaseA = 1};
+  }
 }
