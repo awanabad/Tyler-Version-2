@@ -10,6 +10,7 @@ unsigned long distanceKeeper = 0;
 bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa
 bool chargeFlag = false; //to reverse when dropping off parts
 bool foundBeacon = false; 
+bool secondRound = false;
 unsigned int phaseA = 1; //sweeping
 unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
@@ -106,18 +107,22 @@ void findBeacon() // keep rotating on the spot until the beacon is found
     case 3:
       //set both motors to brake
       //dump parts off and reset
-      phaseA = 4;
-      phaseB = 1;
-      chargeFlag = false;
-      chargeTimer = millis();
-      tempTimer = millis();
-      break;
+      if (secondRound = false)
+      {
+        phaseA = 4;
+        phaseB = 1;
+        chargeFlag = false;
+        chargeTimer = millis();
+        tempTimer = millis();
+        break;
+      }
   }
 }
  
  
 void resumeSweep()
 {
+  round = 2;
   switch (phaseC)
   {
     case 1:
