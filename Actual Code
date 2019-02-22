@@ -4,7 +4,15 @@
 
 //dynamic variables
 unsigned long timer = 0;
-bool turnFlag;
+unsigned long chargeTimer = 0;
+unsigned long angleKeeper = 0;
+unsigned long distanceKeeper = 0;
+bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa
+unsigned phase = 1;
+unsigned echo; //ultrasonic sensor
+const int defaultSpeed = 1800;
+const int slowSpeed = 1600;
+const int reverseSpeed = 1400;
 
 
 void setup() 
@@ -15,6 +23,21 @@ void setup()
 
 void loop()
 {
+  if (echo <= 700 && chargeTimer < 7500) {phase = 2}; //test to find perfect distance from wall
+  if (millis() - chargeTimer >= 7500) {phase = 3}; //test to find how long it takes to reach the charging station
+  
+  switch (phase)
+  {
+    case 1: 
+      ping();
+      driveStraight();
+      timer = millis(); //use if we are basing the turns on time
+    case 2:      
+      uTurn(turnFlag);
+      if (millis - timer >= 1900) {phase = 1}; //set phase back to 1 after turning
+    case 3:
+      findBeacon;
+  }
   
 }
 
@@ -25,19 +48,27 @@ void driveStraight()
 }
 
 
-void uTurn()
+void uTurn(bool direction)
+{
+  if (direction == false)
+  {
+    //left turn: set right motor to defaultSpeed and left to 0
+  }
+  else
+  {
+    //right turn: set left motor to defaultSpeed and right to 0
+  }
+}
+
+
+void ping() //measure distance from wall
 {
 
 }
 
 
-void ping()
+void findBeacon() // keep rotating on the spot until the beacon is found
 {
-
-}
-
-
-void findBeacon()
-{
-
+  //set left motor to slowSpeed
+  //set right motor to reverseSpeed
 }
