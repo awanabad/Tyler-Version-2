@@ -6,7 +6,7 @@ Naming Convention:
 - examples: "turnSpeed" and "leftMotor"
 
 Comment Convention:
-- comment above the line so horizontal scrolling is unnecessary
+- comment above the line  for long lines so horizontal scrolling is unnecessary
 
 Spacing Convention:
 - leave one line between interior functions/sections
