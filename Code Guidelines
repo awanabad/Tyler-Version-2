@@ -17,7 +17,8 @@ Spacing Convention:
 
 Other:
 - case statement for phases
-- create functions if possible
-- when creating an intermediate case, add a 0 before adjusting every other case and test it
+- when creating an intermediate case, add a 0 
   (intermediate cases between 1 and 2 would be 10, 100, 1000, and so on)
+- create functions if possible
+
 
