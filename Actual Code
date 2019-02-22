@@ -106,11 +106,11 @@ void findBeacon() // keep rotating on the spot until the beacon is found
     case 3:
       //set both motors to brake
       //dump parts off and reset
+      phaseA = 4;
       phaseB = 1;
       chargeFlag = false;
       chargeTimer = millis();
       tempTimer = millis();
-      phaseA = 4;
       break;
   }
 }
