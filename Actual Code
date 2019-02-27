@@ -114,8 +114,8 @@ void findBeacon() // keep rotating on the spot until the beacon is found
         chargeFlag = false;
         chargeTimer = millis();
         tempTimer = millis();
-        break;
       }
+      break;
   }
 }
  
@@ -133,5 +133,6 @@ void resumeSweep()
       //set left motor to reverseSlow
       //set right motor to forwardSlow
       if (millis - timer >= angleKeeper) {phaseA = 1};
+      break;
   }
 }
