@@ -30,7 +30,7 @@ void setup()
 
 void loop()
 {
-  if (echo <= 700 && chargeTimer < 7500) {phaseA = 2}; //test to find perfect distance from wall
+  if (echo <= 700 && millis() - chargeTimer < 7500) {phaseA = 2}; //test to find perfect distance from wall
   if (millis() - chargeTimer >= 7500) {phaseA = 3}; //test to find how long it takes to reach the charging station
   
   switch (phaseA)
