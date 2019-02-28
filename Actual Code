@@ -42,12 +42,12 @@ void loop()
       break;
     case 2:      
       uTurn(turnFlag);
-      if (millis - tempTimer >= 1900) {phaseA = 1}; //set phaseA back to 1 after turning
+      if (millis() - tempTimer >= 1900) {phaseA = 1}; //set phaseA back to 1 after turning
       break;
     case 3:
       chargeFlag = true;
       findBeacon;
-      break();
+      break;
     case 4:
       resumeSweep();
       break;
