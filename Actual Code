@@ -46,7 +46,7 @@ void loop()
       break;
     case 3:
       chargeFlag = true;
-      findBeacon;
+      findBeacon();
       break;
     case 4:
       resumeSweep();
