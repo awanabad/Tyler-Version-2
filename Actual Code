@@ -129,10 +129,19 @@ void resumeSweep()
       driveStraight(chargeFlag);
       if (millis - timer >= distanceKeeper) {phaseC = 2};
       break;
-    case 2: // must rotate opposite to findBeacon: case 2
+    case 2: //must rotate opposite to findBeacon: case 2
       //set left motor to reverseSlow
       //set right motor to forwardSlow
       if (millis - timer >= angleKeeper) {phaseA = 1};
       break;
   }
+}
+
+
+void obstacleAvoidance()
+{
+  //if right sensor is close to something and left is far, turn left on the spot, go straight, and turn right on the spot
+  //^ but opposite
+  
+  
 }
