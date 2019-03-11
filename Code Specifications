@@ -5,6 +5,12 @@ Sweeping the Room:
 - a checker to determine when a wall is being approached and to signal a u-turn
 - a boolean flag to alternate the turn direction
 
+Under a Table:
+- a checker to determine whether the robot is under a table or not
+- stop the robot once it is under a table
+- adjust the angle of the robot to be parallel to the lowest bars supporting the table
+- zigzag throughout all 3 table sections (while checking for walls or the next table)
+
 Charging:
 - a timer to signal that charging is needed (should be lower than 90s to allow time to reach charging station)
 - a function to locate the drop-off zone
