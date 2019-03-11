@@ -150,12 +150,14 @@ void obstacleAvoidance()
 }
 
 
-void tableNavigation()
+//can add a condition for when it starts sweeping the 2nd table where it does not sweep the area between the 2 tables again
+//can add a condition for when it moves alongside a bar under no table to go back to normal navigation
+void tableNavigation() 
 {
   switch(phaseD)
   {
     case 1:
-      //turn in the same direction as the current turnFlag until parallel to a bar
+      //turn on the spot until parallel to a bar
       //if parallel phaseD = 2;
     case 2:
       ping();
@@ -165,7 +167,7 @@ void tableNavigation()
         phaseD = 3;
         dumbCount = 0;
       }
-      if (ul_Echo_Time <= turnStart) //or under the next table
+      if (ul_Echo_Time <= turnStart) //or under the next table to start turning
       {
         dumbCount++;
         bt_Motors_Enabled = false;
@@ -174,4 +176,12 @@ void tableNavigation()
       {
         driveStraight(chargeFlag);         
       }
+      case 3:      
+        uTurn(turnFlag);
+        if (millis() - tempTimer >= 1900) 
+        {
+          phaseD = 2; //set phaseD back to 2 after turning
+        }
+        break;
+      case 4:
 }
