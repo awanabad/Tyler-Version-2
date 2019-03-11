@@ -11,9 +11,10 @@ bool turnFlag = false; //assuming the first u-turn is left, false will be a left
 bool chargeFlag = false; //to reverse when dropping off parts
 bool foundBeacon = false; 
 bool secondRound = false;
-unsigned int phaseA = 1; //sweeping
+unsigned int phaseA = 1; //sweeping 1
 unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
+unsigned int phaseD = 1; //sweeping 2
 unsigned echo; //ultrasonic sensor
 const int forwardSpeed = 1800;
 const int reverseSpeed = 1300;
@@ -39,6 +40,7 @@ void loop()
       ping();
       driveStraight(chargeFlag);
       tempTimer = millis(); //use if we are basing the turns on time
+      //if top sensor sees a table, phaseA = 5; 
       break;
     case 2:      
       uTurn(turnFlag);
@@ -50,6 +52,9 @@ void loop()
       break;
     case 4:
       resumeSweep();
+      break;
+    case 5:
+      tableNavigation();
       break;
   }
 }
@@ -142,6 +147,31 @@ void obstacleAvoidance()
 {
   //if right sensor is close to something and left is far, turn left on the spot, go straight, and turn right on the spot
   //^ but opposite
-  
-  
+}
+
+
+void tableNavigation()
+{
+  switch(phaseD)
+  {
+    case 1:
+      //turn in the same direction as the current turnFlag until parallel to a bar
+      //if parallel phaseD = 2;
+    case 2:
+      ping();
+      if (dumbCount > 200)
+      {
+        tempTimer = millis();
+        phaseD = 3;
+        dumbCount = 0;
+      }
+      if (ul_Echo_Time <= turnStart) //or under the next table
+      {
+        dumbCount++;
+        bt_Motors_Enabled = false;
+      }
+      if (ul_Echo_Time >= turnStart)
+      {
+        driveStraight(chargeFlag);         
+      }
 }
