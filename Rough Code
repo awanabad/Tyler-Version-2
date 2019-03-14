@@ -9,9 +9,10 @@ unsigned long angleKeeper = 0;
 unsigned long distanceKeeper = 0;
 bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa
 bool chargeFlag = false; //to reverse when dropping off parts
+bool tableFlagA = false;
+bool tableFlagB = false;
 bool foundBeacon = false; 
 bool secondRound = false;
-bool nextTable = false;
 unsigned int phaseA = 1; //sweeping 1
 unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
@@ -164,12 +165,13 @@ void tableNavigation()
       //if parallel phaseD = 2;
       break;
     case 2:
-      ping(); //top ultra     
+      ping(); //top ultrasonic     
       if (dumbCount > 200)
       {
         tempTimer = millis();
         phaseD = 3;
         dumbCount = 0;
+        tableFlagA = false;
       }
       if() //no table above
       {
@@ -188,7 +190,7 @@ void tableNavigation()
         phaseD = 4;
         dumbCount = 0;
       }
-      if (ul_Echo_Time <= turnStart || nextTable == true)
+      if (ul_Echo_Time <= turnStart || tableFlagB == true)
       {
         dumbCount++;
         bt_Motors_Enabled = false;
@@ -198,7 +200,7 @@ void tableNavigation()
         driveStraight(chargeFlag);
         if() //under next table
         {
-          nextTable = true;
+          tableFlagB = true;
         }
       }
       break;
@@ -215,7 +217,13 @@ void tableNavigation()
       if ((millis() - tempTimer >= 2000) //and table above
       {
         phaseD = 2;
-        tableFlag = false;
+        tableFlagA = true;
+        tableFlagB = false;
+      }
+      if ((millis() - tempTimer >= 4000 && tableFlagA == false) 
+      {
+        phaseA = 3;
+        phaseD = 1;
       }
       break;
 }
