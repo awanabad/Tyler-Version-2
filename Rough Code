@@ -148,7 +148,7 @@ void resumeSweep()
 
 void obstacleAvoidance()
 {
-  //if right sensor is close to something and left is far, turn left on the spot, go straight until nothing is on the right, and turn right on the spot
+  //if right sensor is close to something and left is far, turn left on the spot, go straight until nothing is on the right, and turn right on the spot at the same angle as the first turn
   //^ but opposite
 }
 
