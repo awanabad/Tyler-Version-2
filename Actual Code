@@ -11,10 +11,12 @@ bool turnFlag = false; //assuming the first u-turn is left, false will be a left
 bool chargeFlag = false; //to reverse when dropping off parts
 bool foundBeacon = false; 
 bool secondRound = false;
+bool nextTable = false;
 unsigned int phaseA = 1; //sweeping 1
 unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
 unsigned int phaseD = 1; //sweeping 2
+unsigned int phaseE = 1; //table checking
 unsigned echo; //ultrasonic sensor
 const int forwardSpeed = 1800;
 const int reverseSpeed = 1300;
@@ -55,6 +57,7 @@ void loop()
       break;
     case 5:
       tableNavigation();
+      tableFlagA = true;
       break;
   }
 }
@@ -145,7 +148,7 @@ void resumeSweep()
 
 void obstacleAvoidance()
 {
-  //if right sensor is close to something and left is far, turn left on the spot, go straight, and turn right on the spot
+  //if right sensor is close to something and left is far, turn left on the spot, go straight until nothing is on the right, and turn right on the spot
   //^ but opposite
 }
 
@@ -159,29 +162,62 @@ void tableNavigation()
     case 1:
       //turn on the spot until parallel to a bar
       //if parallel phaseD = 2;
+      break;
     case 2:
-      ping();
+      ping(); //top ultra     
       if (dumbCount > 200)
       {
         tempTimer = millis();
         phaseD = 3;
         dumbCount = 0;
       }
-      if (ul_Echo_Time <= turnStart) //or under the next table to start turning
+      if() //no table above
+      {
+        dumbCount++;
+      }
+      else 
+      {
+        driveStraight(chargeFlag);
+      }
+      break;
+    case 3:
+      ping();
+      if (dumbCount > 200)
+      {
+        tempTimer = millis();
+        phaseD = 4;
+        dumbCount = 0;
+      }
+      if (ul_Echo_Time <= turnStart || nextTable == true)
       {
         dumbCount++;
         bt_Motors_Enabled = false;
       }
-      if (ul_Echo_Time >= turnStart)
+      else
       {
-        driveStraight(chargeFlag);         
+        driveStraight(chargeFlag);
+        if() //under next table
+        {
+          nextTable = true;
+        }
       }
-      case 3:      
+      break;
+      case 4:      
         uTurn(turnFlag);
         if (millis() - tempTimer >= 1900) 
         {
-          phaseD = 2; //set phaseD back to 2 after turning
+          phaseD = 5; 
+          tempTimer = millis(); 
         }
-        break;
-      case 4:
+        break;   
+     case 5:
+      driveStraight(chargeFlag);
+      if ((millis() - tempTimer >= 2000) //and table above
+      {
+        phaseD = 2;
+        tableFlag = false;
+      }
+      break;
 }
+
+
