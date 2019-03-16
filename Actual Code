@@ -97,12 +97,6 @@ bool foundBeacon = false;
 bool secondRound = false;
 bool bt_Motors_Enabled = true;
 
-
-
-
-
-
-
 //variables
 byte b_LowByte;
 byte b_HighByte;
@@ -149,7 +143,8 @@ boolean bt_3_S_Time_Up = false;
 boolean bt_Do_Once = false;
 boolean bt_Cal_Initialized = false;
 
-void setup() {
+void setup() 
+{
   Wire.begin();        // Wire library required for I2CEncoder library
   Serial.begin(9600);
 
