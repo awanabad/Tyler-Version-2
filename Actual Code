@@ -2,7 +2,7 @@
 
   MSE 2202 MSEBot base code for 2019 Project
   Language: Arduino
-  Authors: Group 16
+  Authors: Group 13
   Date: 16/02/19
 
 */
@@ -87,6 +87,7 @@ unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
 unsigned int phaseD = 1; //avoiding
 unsigned int phaseE = 1; //turning
+unsigned int phaseF = 1; //driving
 unsigned int dumbCount = 0;
 unsigned echo; //ultrasonic sensor reading
 unsigned infra; //infrared sensor reading
@@ -254,15 +255,12 @@ void loop()
           ui_Left_Motor_Speed = constrain(forwardSpeed + ui_Left_Motor_Offset, 1600, 2100);
           ui_Right_Motor_Speed = constrain(forwardSpeed + ui_Right_Motor_Offset, 1600, 2100);
 
-
           /*if (frontLeftEcho <= 700 && millis() - chargeTimer < 7500)
             {
             phaseA = 2;
-            } //test to find perfect distance from wall*/
-
+            } //test to find perfect distance from wall
           infra = analogRead(ci_Light_Sensor);
-          Serial.println(infra);
-
+          Serial.println(infra);*/
           if (millis() - chargeTimer >= 7500) //test to find how long it takes to reach the charging station
           {
             phaseA = 3;
@@ -275,16 +273,6 @@ void loop()
                 tempTimer = millis();
                 phaseA = 2;
                 dumbCount = 0;
-              }
-              if (frontLeftEcho <= turnStart && frontRightEcho <= turnStart)
-              {
-                dumbCount++;
-                bt_Motors_Enabled = false;
-              }
-              if ((frontLeftEcho <= turnStart && frontRightEcho >= turnStart * 1.5) || (frontRightEcho <= turnStart && frontLeftEcho >= turnStart * 1.5))
-              {
-                phaseA = 5;
-                bt_Motors_Enabled = false;
               }
               else
               {
@@ -315,20 +303,22 @@ void loop()
               break;
             case 5:
               obstacleAvoidance();
+              avoidFlag = true;
               break;
           }
-
-
+          
           if (bt_Motors_Enabled)
           {
             servo_LeftMotor.writeMicroseconds(ui_Left_Motor_Speed);
             servo_RightMotor.writeMicroseconds(ui_Right_Motor_Speed);
           }
+          
           else
           {
             servo_LeftMotor.writeMicroseconds(brake);
             servo_RightMotor.writeMicroseconds(brake);
           }
+          
 #ifdef DEBUG_MOTORS
           Serial.print("Motors enabled: ");
           Serial.print(bt_Motors_Enabled);
@@ -449,7 +439,6 @@ unsigned long ping(const int output, const int input)
 #endif
 }
 
-
 void obstacleAvoidance()
 {
   switch (phaseD)
@@ -464,13 +453,24 @@ void obstacleAvoidance()
 
 void driveStraight(bool direction)
 {
-  frontLeftEcho = ping(frontLPing, frontLData);
-  frontRightEcho = ping(frontRPing, frontRData);
-  if (direction == false)
+  if(direction == false)
   {
     ui_Left_Motor_Speed = forwardSpeed;
     ui_Right_Motor_Speed = forwardSpeed;
     bt_Motors_Enabled = true;
+    frontLeftEcho = ping(frontLPing, frontLData);
+    frontRightEcho = ping(frontRPing, frontRData);
+    if (frontLeftEcho <= turnStart && frontRightEcho <= turnStart)
+    {
+      dumbCount++;
+      bt_Motors_Enabled = false;
+      phaseF = 2;
+    }
+    else if((frontLeftEcho <= turnStart && frontRightEcho >= turnStart * 2) || (frontRightEcho <= turnStart && frontLeftEcho >= turnStart * 2))
+    {
+      obstacleAvoidance();
+      bt_Motors_Enabled = false;
+    } 
   }
   else
   {
@@ -478,11 +478,12 @@ void driveStraight(bool direction)
     ui_Right_Motor_Speed = reverseSpeed;
     bt_Motors_Enabled = true;
   }
-
+  
 }
 
 void uTurn(bool direction)
 {
+  
   if (direction == false)
   {
     ui_Left_Motor_Speed = brake;
