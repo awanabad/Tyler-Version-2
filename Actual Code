@@ -87,7 +87,6 @@ unsigned int phaseB = 1; //dumping
 unsigned int phaseC = 1; //resuming
 unsigned int phaseD = 1; //avoiding
 unsigned int phaseE = 1; //turning
-unsigned int phaseF = 1; //driving
 unsigned int dumbCount = 0;
 unsigned echo; //ultrasonic sensor reading
 unsigned infra; //infrared sensor reading
