@@ -93,6 +93,7 @@ unsigned infra; //infrared sensor reading
 bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa (should ping left and right to determine first turn)
 bool avoidFlag = false; //to turn on the spot instead of u-turning after avoiding an obstacle
 bool chargeFlag = false; //to reverse when dropping off parts
+bool leftSideStart = false;
 bool foundBeacon = false;
 bool secondRound = false;
 bool bt_Motors_Enabled = true;
@@ -200,6 +201,7 @@ void setup()
   else
   {
     turnFlag = true;
+    leftSideStart = true;
   }
 }
 
@@ -274,6 +276,7 @@ void loop()
             } //test to find perfect distance from wall
           infra = analogRead(ci_Light_Sensor);
           Serial.println(infra);*/
+          
           if (millis() - chargeTimer >= 7500) //test to find how long it takes to reach the charging station
           {
             phaseA = 3;
@@ -526,10 +529,9 @@ void obstacleAvoidance()
   }
 }
 
-void driveStraight(bool direction)
+void driveStraight()
 {
-  if(direction == false)
-  {
+  
     ui_Left_Motor_Speed = forwardSpeed;
     ui_Right_Motor_Speed = forwardSpeed;
     bt_Motors_Enabled = true;
@@ -540,13 +542,7 @@ void driveStraight(bool direction)
       dumbCount++;
       bt_Motors_Enabled = false;
     }
-  }
-  else
-  {
-    ui_Left_Motor_Speed = reverseSpeed;
-    ui_Right_Motor_Speed = reverseSpeed;
-    bt_Motors_Enabled = true;
-  }  
+  
 }
 
 void uTurn(bool direction)
@@ -573,27 +569,7 @@ void findBeacon() // keep rotating on the spot until the beacon is found
 
 void resumeSweep() //start from the other side of the room
 {
-  secondRound = true;
-  switch (phaseC)
-  {
-    case 1:
-      driveStraight(chargeFlag);
-      if (millis() - tempTimer >= distanceKeeper)
-      {
-        tempTimer = millis();
-        phaseC = 2;
-      }
-      break;
-    case 2: // must rotate opposite to findBeacon: case 2
-      ui_Left_Motor_Speed = reverseSlow;
-      ui_Right_Motor_Speed = forwardSlow;
-      bt_Motors_Enabled = true;
-      if (millis() - tempTimer >= angleKeeper)
-      {
-        phaseA = 1;
-      }
-      break;
-  }
+  //if(leftSideStart == true) and vice versa
 }
 
 
