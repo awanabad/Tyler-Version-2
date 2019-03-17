@@ -487,6 +487,7 @@ void obstacleAvoidance()
       if(tempLeftEcho - frontLeftEcho >= 3000 && tempRightEcho - frontRightEcho >= 3000)
       {
         phaseD = 4;
+        bt_Motors_Enabled = false; 
       }
       else
       {
@@ -497,7 +498,31 @@ void obstacleAvoidance()
     case 4: //ping left and right to determine which side will cover more area
       leftEcho = ping(leftData, leftPing);
       rightEcho = ping(rightData, rightPing);
-      
+      phaseD = 5;
+      tempTimer = millis();
+      if (leftEcho > rightEcho)
+      {
+        servo_leftMotor.write(encoder_LeftMotor.getRawPosition() - rightAngle);
+        servo_rightMotor.write(encoder_RightMotor.getRawPosition() + rightAngle);
+        if (turnFlag == false)
+        {
+          turnFlag = true; //because it would have already turned around
+        }
+      }
+      else
+      {
+        servo_leftMotor.write(encoder_LeftMotor.getRawPosition() + rightAngle);
+        servo_rightMotor.write(encoder_RightMotor.getRawPosition() - rightAngle);
+        if (turnFlag == true)
+        {
+          turnFlag = false; //because it would have already turned around
+        }
+      }
+      case 5:
+        if(tempTimer - millis() >= 2000)
+        {
+          phaseA = 1;
+        }
   }
 }
 
@@ -521,8 +546,7 @@ void driveStraight(bool direction)
     ui_Left_Motor_Speed = reverseSpeed;
     ui_Right_Motor_Speed = reverseSpeed;
     bt_Motors_Enabled = true;
-  }
-  
+  }  
 }
 
 void uTurn(bool direction)
