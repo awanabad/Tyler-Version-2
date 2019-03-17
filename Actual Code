@@ -68,6 +68,7 @@ const int forwardSlow = 1600;
 const int reverseSlow = 1400;
 const int brake = 1500;
 const int uTurnTime = 1900;
+const int rightAngle = 750;
 const int turnStart = 1000;
 const int ci_Display_Time = 500;
 const int ci_Motor_Calibration_Cycles = 3;
@@ -88,7 +89,6 @@ unsigned int phaseC = 1; //resuming
 unsigned int phaseD = 1; //avoiding
 unsigned int phaseE = 1; //turning
 unsigned int dumbCount = 0;
-unsigned echo; //ultrasonic sensor reading
 unsigned infra; //infrared sensor reading
 bool turnFlag = false; //assuming the first u-turn is left, false will be a left turn and vice versa (should ping left and right to determine first turn)
 bool avoidFlag = false; //to turn on the spot instead of u-turning after avoiding an obstacle
@@ -107,6 +107,8 @@ unsigned long frontRightEcho;
 unsigned long leftEcho;
 unsigned long rightLEcho;
 unsigned long topEcho;
+unsigned long tempLeftEcho;
+unsigned long tempRightEcho;
 long l_Left_Motor_Position;
 long l_Right_Motor_Position;
 
@@ -187,6 +189,18 @@ void setup()
   b_LowByte = EEPROM.read(ci_Right_Motor_Offset_Address_L);
   b_HighByte = EEPROM.read(ci_Right_Motor_Offset_Address_H);
   ui_Right_Motor_Offset = word(b_HighByte, b_LowByte);
+  
+  //ping left and right to decide the first turn  
+  leftEcho = ping(leftData,leftPing);
+  rightEcho = (rightData,rightPing);
+  if(leftEcho > rightEcho)
+  {
+    turnFlag = false;
+  }
+  else
+  {
+    turnFlag = true;
+  }
 }
 
 void loop()
@@ -273,6 +287,11 @@ void loop()
                 phaseA = 2;
                 dumbCount = 0;
               }
+              if((frontLeftEcho <= turnStart && frontRightEcho >= turnStart * 2) || (frontRightEcho <= turnStart && frontLeftEcho >= turnStart * 2))
+              {
+                phaseA = 5;
+                bt_Motors_Enabled = false;
+              } 
               else
               {
                 driveStraight(chargeFlag);
@@ -440,13 +459,45 @@ unsigned long ping(const int output, const int input)
 
 void obstacleAvoidance()
 {
-  switch (phaseD)
+  switch(phaseD)
   {
-    case 1:
-      if (turnFlag == false) //turn left
-      {
-
+    case 1: //turn in direction of turnFlag
+      if(turnFlag == false) 
+      {     
+        servo_leftMotor.write(encoder_LeftMotor.getRawPosition() - rightAngle);
+        servo_rightMotor.write(encoder_RightMotor.getRawPosition() + rightAngle);       
       }
+      else
+      {
+        servo_leftMotor.write(encoder_LeftMotor.getRawPosition() + rightAngle);
+        servo_rightMotor.write(encoder_RightMotor.getRawPosition() - rightAngle);
+      }
+      tempTimer = millis();
+      phaseD = 2;
+    case 2: //ping distance from the wall
+      if(tempTimer - millis() >= 2000) //allow time to turn
+      {
+        tempLeftEcho = ping(frontLeftData, frontLeftPing);
+        tempRightEcho = ping(frontRightData, frontRightPing);
+        phaseD = 3;
+      }
+    case 3: //move a certain distance towards the wall
+      frontLeftEcho = ping(frontLeftData, frontLeftPing);
+      frontRightEcho = ping(frontRightData, frontRightPing);
+      if(tempLeftEcho - frontLeftEcho >= 3000 && tempRightEcho - frontRightEcho >= 3000)
+      {
+        phaseD = 4;
+      }
+      else
+      {
+        ui_Left_Motor_Speed = forwardSpeed;
+        ui_Right_Motor_Speed = forwardSpeed;
+        bt_Motors_Enabled = true; 
+      }
+    case 4: //ping left and right to determine which side will cover more area
+      leftEcho = ping(leftData, leftPing);
+      rightEcho = ping(rightData, rightPing);
+      
   }
 }
 
@@ -463,13 +514,7 @@ void driveStraight(bool direction)
     {
       dumbCount++;
       bt_Motors_Enabled = false;
-      phaseF = 2;
     }
-    else if((frontLeftEcho <= turnStart && frontRightEcho >= turnStart * 2) || (frontRightEcho <= turnStart && frontLeftEcho >= turnStart * 2))
-    {
-      obstacleAvoidance();
-      bt_Motors_Enabled = false;
-    } 
   }
   else
   {
@@ -502,7 +547,7 @@ void findBeacon() // keep rotating on the spot until the beacon is found
 
 }
 
-void resumeSweep()
+void resumeSweep() //start from the other side of the room
 {
   secondRound = true;
   switch (phaseC)
@@ -526,3 +571,5 @@ void resumeSweep()
       break;
   }
 }
+
+
