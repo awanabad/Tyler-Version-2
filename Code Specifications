@@ -4,6 +4,7 @@ Code Sketch
 Sweeping the Room:
 - a checker to determine when a wall is being approached and to signal a u-turn
 - a boolean flag to alternate the turn direction
+- a function to ensure writing to motors based on motor postition to ensure that the robot is traversing a perfectly straight line
 
 Under a Table:
 - a checker to determine whether the robot is under a table or not
