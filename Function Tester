@@ -1,0 +1,330 @@
+/*
+
+  MSE 2202 MSEBot Project
+  Language: Arduino
+  Authors: Group 16
+  Date: current
+
+  Rev 1 - Initial version
+  Rev 2 - Update for MSEduino v. 2
+
+*/
+
+#include <Servo.h>
+#include <EEPROM.h>
+#include <uSTimer2.h>
+#include <CharliePlexM.h>
+#include <Wire.h>
+#include <I2CEncoder.h>
+
+Servo servo_leftMotor;
+Servo servo_rightMotor;
+Servo servo_slideMotor;
+Servo servo_rollerMotor;  //might just connect it to power
+
+I2CEncoder encoder_leftMotor;
+I2CEncoder encoder_rightMotor;
+
+//pins
+const int frontLeftPing = 2;   //input plug
+const int frontLeftData = 3;   //output plug
+const int frontRightPing = 4;
+const int frontRightData = 5;
+const int leftPing = 10;
+const int leftData = 11;
+const int rightPing = 12;
+const int rightData = 13;
+const int leftMotor = 8;
+const int rightMotor = 9;
+const int slideMotor = 6;
+const int rollerMotor = 7;  //might just connect it to power
+const int modeButton = 7;
+const int motorEnableSwitch = 12;
+const int lightSensor = A3;
+const int ci_I2C_SDA = A4;         //I2C data = white
+const int ci_I2C_SCL = A5;         //I2C clock = yellow
+
+//charlieplexing
+const int led1 = 4;
+const int led2 = 5;
+const int led3 = 6;
+const int led4 = 7;
+const int heartbeatLed = 1;
+const int indicatorLed = 4;
+
+//constants
+const int forwardSpeed = 1800;
+const int reverseSpeed = 1300;
+const int forwardSlow = 1600;
+const int reverseSlow = 1400;
+const int brake = 1500;
+const int uTurn = 2300;
+const int rightAngle = 750;
+const int turnStart = 1000;
+const int displayTime = 500;
+const int slideRetracted = 0;
+const int slideExtended = 1000;
+const int motorCalibrationCycles = 3;
+const int motorCalibrationTime = 5000;
+const int leftMotorOffsetAddress_L = 12;
+const int leftMotorOffsetAddress_H = 13;
+const int rightMotorOffsetAddress_L = 14;
+const int rightMotorOffsetAddress_H = 15;
+
+//variables
+long leftMotorPosition;
+long rightMotorPosition;
+unsigned long tempTimer = 0;
+unsigned long chargeTimer = 0;
+unsigned long frontLeftEcho;
+unsigned long frontRightEcho;
+unsigned long leftEcho;
+unsigned long rightLEcho;
+unsigned long tempLeftEcho;
+unsigned long tempRightEcho;
+unsigned long 3secondTimer = 0;
+unsigned long tempDisplayTime;
+unsigned long calibrationTime;
+unsigned long leftMotorOffset;
+unsigned long rightMotorOffset;
+unsigned phaseA = 1; //overall logic
+unsigned phaseB = 1; //dumping
+unsigned phaseC = 1; //resuming
+unsigned phaseD = 1; //avoiding
+unsigned phaseE = 1; //turning
+unsigned dumbCount = 0;
+unsigned infra; //infrared sensor reading
+unsigned leftMotorSpeed;
+unsigned rightMotorSpeed;
+unsigned calCount;
+unsigned calCycle;
+bool turnFlag;
+bool avoidFlag = false; //to turn on the spot rather than an axel after avoiding an obstacle
+bool chargeFlag = false; //
+bool leftSideStart = false;
+bool foundBeacon = false;
+bool secondRound = false;
+bool motorsEnabled = true;
+byte b_lowByte;
+byte b_highByte;
+
+unsigned int  robotStateIndex = 0;
+//0123456789ABCDEF
+unsigned int  modeIndicator[6] = {
+  0x00,    //B0000000000000000,  //Stop
+  0x00FF,  //B0000000011111111,  //Run
+  0xAAAA,  //B1010101010101010,  //Calibrate motors
+  0xFFFF   //B1111111111111111   //Unused
+};
+
+unsigned int  modeIndicatorIndex = 0;
+
+//display Bits 0,1,2,3, 4, 5, 6,  7,  8,  9,  10,  11,  12,  13,   14,   15
+int  iArray[16] = {
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 65536
+};
+int  iArrayIndex = 0;
+
+bool bt_heartBeat = true;
+bool bt_3sTimeUp = false;
+bool bt_doOnce = false;
+bool bt_calInitialized = false;
+
+void setup() {
+  Wire.begin();        // Wire library required for I2CEncoder library
+  Serial.begin(9600);
+
+  CharliePlexM::setBtn(led1, led2, led3, led4, modeButton);
+
+  //set up ultrasonic sensors
+  pinMode(frontLeftPing, OUTPUT);
+  pinMode(frontLeftData, INPUT);
+  pinMode(frontRightPing, OUTPUT);
+  pinMode(frontRightData, INPUT);
+  pinMode(leftPing, OUTPUT);
+  pinMode(leftData, INPUT);
+  pinMode(rightPing, OUTPUT);
+  pinMode(rightData, INPUT);
+  pinMode(topPing, OUTPUT);
+  pinMode(topData, INPUT);
+
+  //set up motors
+  pinMode(rightMotor, OUTPUT);
+  servo_rightMotor.attach(rightMotor);
+  pinMode(leftMotor, OUTPUT);
+  servo_leftMotor.attach(leftMotor);
+  pinMode(slideMotor, OUTPUT);
+  servo_slideMotor.attach(slideMotor);
+  /*pinMode(rollerMotor, OUTPUT);           likely unnecessary
+    servo_rollerMotor.attach(rollerMotor);*/
+
+  //set up motor enable switch
+  pinMode(motorEnableSwitch, INPUT);
+
+  //set up encoders
+  encoder_leftMotor.init(1.0 / 3.0 * MOTOR_393_SPEED_ROTATIONS, MOTOR_393_TIME_DELTA);
+  encoder_leftMotor.setReversed(false);  // adjust for positive count when moving forward
+  encoder_rightMotor.init(1.0 / 3.0 * MOTOR_393_SPEED_ROTATIONS, MOTOR_393_TIME_DELTA);
+  encoder_rightMotor.setReversed(true);  // adjust for positive count when moving forward
+
+  //read saved values from EEPROM
+  b_lowByte = EEPROM.read(leftMotorOffsetAddress_L);
+  b_highByte = EEPROM.read(leftMotorOffsetAddress_H);
+  leftMotorOffset = word(b_highByte, b_lowByte);
+  b_lowByte = EEPROM.read(rightMotorOffsetAddress_L);
+  b_highByte = EEPROM.read(rightMotorOffsetAddress_H);
+  rightMotorOffset = word(b_highByte, b_lowByte);
+}
+
+void loop() {
+  if ((millis() - 3secondTimer) >= 3000)
+  {
+    bt_3sTimeUp = true;
+  }
+
+  // button-based mode selection
+  if (CharliePlexM::ui_Btn)
+  {
+    if (bt_doOnce == false)
+    {
+      bt_doOnce = true;
+      robotStateIndex++;
+      robotStateIndex = robotStateIndex & 7;
+      3secondTimer = millis();
+      bt_3sTimeUp = false;
+      bt_calInitialized = false;
+      calCycle = 0;
+    }
+  }
+  else
+  {
+    bt_doOnce = LOW;
+  }
+
+  // check if drive motors should be powered
+  motorsEnabled = digitalRead(motorEnableSwitch);
+
+  // modes
+  // 0 = default after power up/reset
+  // 1 = Press mode button once to enter. Run robot.
+  // 4 = Press mode button four times to enter. Calibrate motor speeds to drive straight.
+  switch (robotStateIndex)
+  {
+    case 0:    //default state
+      ping();
+      servo_leftMotor.writeMicroseconds(brake);
+      servo_rightMotor.writeMicroseconds(brake);
+      servo_slideMotor.write(slideRetracted);
+      encoder_leftMotor.zero();
+      encoder_rightMotor.zero();
+      modeIndicatorIndex = 0;
+      break;
+
+    case 1:    //run robot
+      if (bt_3_S_Time_Up)
+      {
+        //set motor speeds
+        ui_Left_Motor_Speed = constrain(ui_Motors_Speed + ui_Left_Motor_Offset, 1600, 2100);
+        ui_Right_Motor_Speed = constrain(ui_Motors_Speed + ui_Right_Motor_Offset, 1600, 2100);
+
+        if (bt_Motors_Enabled)
+        {
+          servo_LeftMotor.writeMicroseconds(leftMotorSpeed);
+          servo_RightMotor.writeMicroseconds(rightMotorSpeed);
+        }
+        else
+        {
+          servo_LeftMotor.writeMicroseconds(brake);
+          servo_RightMotor.writeMicroseconds(brake);
+        }
+        modeIndicatorIndex = 1;
+      }
+      break;
+
+    case 4:    //calibrate motors
+
+      if (bt_3sTimeUp)
+      {
+        if (!calInitialized)
+        {
+          calInitialized = true;
+          encoder_leftMotor.zero();
+          encoder_rightMotor.zero();
+          calibrationTime = millis();
+          servo_leftMotor.writeMicroseconds(forwardSpeed);
+          servo_rightMotor.writeMicroseconds(forwardSpeed);
+        }
+        else if ((millis() - calibrationTime) > motorCalibrationTime)
+        {
+          servo_LeftMotor.writeMicroseconds(brake);
+          servo_RightMotor.writeMicroseconds(brake);
+          leftMotorPosition = encoder_leftMotor.getRawPosition();
+          rightMotorPosition = encoder_rightMotor.getRawPosition();
+          if (leftMotorPosition > rightMotorPosition)
+          {
+            // May have to update this if different calibration time is used
+            rightMotorOffset = 0;
+            leftMotorOffset = (leftMotorPosition - rightMotorPosition) / 4;
+          }
+          else
+          {
+            // May have to update this if different calibration time is used
+            rightMotorOffset = (rightMotorPosition - leftMotorPosition) / 4;
+            leftMotorOffset = 0;
+          }
+
+          EEPROM.write(rightMotorOffsetAddress_L, lowByte(rightMotorOffset));
+          EEPROM.write(rightMotorOffsetAddress_H, highByte(rightMotorOffset));
+          EEPROM.write(leftMotorOffsetAddress_L, lowByte(leftMotorOffset));
+          EEPROM.write(leftMotorOffsetAddress_H, highByte(leftMotorOffset));
+
+          robotStateIndex = 0;    //go back to Mode 0
+        }
+        modeIndicatorIndex = 4;
+      }
+      break;
+  }
+
+  if ((millis() - tempDisplayTime) > displayTime)
+  {
+    displayTime = millis();
+    bt_heartbeat = !bt_heartbeat;
+    CharliePlexM::Write(heartbeatLed, bt_heartbeat);
+    digitalWrite(13, bt_heartbeat);
+    indicator();
+  }
+}
+
+
+// set mode indicator LED state
+void indicator()
+{
+  //display routine, if true turn on led
+  CharliePlexM::Write(indicatorLed, !(modeIndicator[modeIndicatorIndex] & (iArray[iArrayIndex])));
+  iArrayIndex++;
+  iArrayIndex = iArrayIndex & 15;
+}
+
+
+// measure distance to target using ultrasonic sensor
+unsigned long ping(const int p, const int d)
+{
+  //Ping Ultrasonic
+  //Send the Ultrasonic Range Finder a 10 microsecond pulse per tech spec
+  digitalWrite(p, HIGH);
+  delayMicroseconds(10);  //The 10 microsecond pause where the pulse in "high"
+  digitalWrite(p, LOW);
+  //use command pulseIn to listen to Ultrasonic_Data pin to record the
+  //time that it takes from when the Pin goes HIGH until it goes LOW
+  return pulseIn(d, HIGH, 10000);
+
+  // Print Sensor Readings
+#ifdef DEBUG_ULTRASONIC
+  Serial.print("Time (microseconds): ");
+  Serial.print(ul_Echo_Time, DEC);
+  Serial.print(", Inches: ");
+  Serial.print(ul_Echo_Time / 148); //divide time by 148 to get distance in inches
+  Serial.print(", cm: ");
+  Serial.println(ul_Echo_Time / 58); //divide time by 58 to get distance in cm
+#endif
+}
