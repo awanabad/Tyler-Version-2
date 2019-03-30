@@ -14,6 +14,7 @@
 #include <Servo.h>
 #include <EEPROM.h>
 #include <uSTimer2.h>
+#include <CharliePlexM.h>
 #include <Wire.h>
 #include <I2CEncoder.h>
 
@@ -26,8 +27,8 @@ I2CEncoder encoder_leftMotor;
 I2CEncoder encoder_rightMotor;
 
 //pins
-const int frontLeftPing = 2;   //input plug or trig
-const int frontLeftData = 3;   //output plug or echo
+const int frontLeftPing = 2;   //input plug
+const int frontLeftData = 3;   //output plug
 const int frontRightPing = 4;
 const int frontRightData = 5;
 const int leftPing = 10;
@@ -37,29 +38,33 @@ const int rightData = 13;
 const int leftMotor = 8;
 const int rightMotor = 9;
 const int slideMotor = 6;
-const int motorEnableSwitch = 7;
-const int leftBumper = A0;  //will also control mode
-const int rightBumper = A1; //C to ground and NO to port
-const int rightLightSensor = A2;
-const int backLightSensor = A3;
+const int rollerMotor = 7;  //might just connect it to power
+const int modeButton = 7;
+const int motorEnableSwitch = 12;
+const int bumper = A2;
+const int lightSensor = A3;
 const int ci_I2C_SDA = A4;         //I2C data = white
 const int ci_I2C_SCL = A5;         //I2C clock = yellow
 
+//charlieplexing
+const int led1 = 4;
+const int led2 = 5;
+const int led3 = 6;
+const int led4 = 7;
+const int heartbeatLed = 1;
+const int indicatorLed = 4;
+
 //constants
-const int forwardSpeed = 1900; //set to max later (2100)
-const int reverseSpeed = 1100; //set to max later (900)
+const int forwardSpeed = 1700;
+const int reverseSpeed = 1300;
 const int forwardSlow = 1600;
 const int reverseSlow = 1400;
 const int brake = 1500;
-const int straightTolerance = 10;
-const int wallTolerance = 1000;
-const int obstacleTolerance = 200;
-const int wallAllowance = 1400;
-const int beaconAllowance = 2500;
-const int turnAllowance = 2000;
-const int ninety = 550;
-const int one80 = 2400;
+const int straightnessTolerance = 50;
+const int ninety = 750;
+const int one80 = 2300;
 const int three60 = 5200;
+const int turnStart = 500;
 const int displayTime = 500;
 const int slideRetracted = 0;
 const int slideExtended = 1000;
@@ -73,7 +78,6 @@ const int rightMotorOffsetAddress_H = 15;
 //variables
 long leftMotorPosition;
 long rightMotorPosition;
-unsigned long tempDistance;
 unsigned long tempTimer = 0;
 unsigned long chargeTimer = 0;
 unsigned long frontLeftEcho;
@@ -87,35 +91,50 @@ unsigned long tempDisplayTime;
 unsigned long calibrationTime;
 unsigned long leftMotorOffset;
 unsigned long rightMotorOffset;
-unsigned buttonHold = 0;
-unsigned robotState = 0;
 unsigned phaseA = 1; //overall logic
 unsigned phaseB = 1; //finding the beacon
 unsigned phaseC = 1; //avoiding obstacles
 unsigned phaseD = 1; //
 unsigned dumbCount = 0;
-unsigned rightInfra; //right infrared sensor reading
-unsigned backInfra;
+unsigned infra; //infrared sensor reading
 unsigned leftMotorSpeed;
 unsigned rightMotorSpeed;
 unsigned calCount;
 unsigned calCycle;
-bool secondRound = false;
-bool turnFlag;
-bool obstacleFlag = false;
-bool toggle = false;
-bool worthFlag = false;
-bool startingTurn;  //to sweep the other side on the second round
+bool turnFlag = true;
+bool startingTurn;
 bool motorsEnabled = true;
-bool bt_3sTimeUp = false;
-bool bt_calInitialized = false;
 byte b_lowByte;
 byte b_highByte;
+
+unsigned int  robotStateIndex = 0;
+//0123456789ABCDEF
+unsigned int  modeIndicator[6] = {
+  0x00,    //B0000000000000000,  //Stop
+  0x00FF,  //B0000000011111111,  //Run
+  0xAAAA,  //B1010101010101010,  //Calibrate motors
+  0xFFFF   //B1111111111111111   //Unused
+};
+
+unsigned int  modeIndicatorIndex = 0;
+
+//display Bits 0,1,2,3, 4, 5, 6,  7,  8,  9,  10,  11,  12,  13,   14,   15
+int  iArray[16] = {
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 65536
+};
+int  iArrayIndex = 0;
+
+bool bt_heartbeat = true;
+bool bt_3sTimeUp = false;
+bool bt_doOnce = false;
+bool bt_calInitialized = false;
 
 
 void setup() {
   Wire.begin();        // Wire library required for I2CEncoder library
   Serial.begin(9600);
+
+  CharliePlexM::setBtn(led1, led2, led3, led4, modeButton);
 
   //set up ultrasonic sensors
   pinMode(frontLeftPing, OUTPUT);
@@ -126,6 +145,8 @@ void setup() {
   pinMode(leftData, INPUT);
   pinMode(rightPing, OUTPUT);
   pinMode(rightData, INPUT);
+  //pinMode(topPing, OUTPUT);
+  //pinMode(topData, INPUT);
 
   //set up motors
   pinMode(rightMotor, OUTPUT);
@@ -137,9 +158,8 @@ void setup() {
   /*pinMode(rollerMotor, OUTPUT);           likely unnecessary
     servo_rollerMotor.attach(rollerMotor);*/
 
-  //set up bumper and mode button
-  pinMode(leftBumper, INPUT_PULLUP);
-  pinMode(rightBumper, INPUT_PULLUP);
+  //set up bumper and motor enable switch
+  pinMode(bumper, INPUT_PULLUP);
   pinMode(motorEnableSwitch, INPUT);
 
   //set up encoders
@@ -165,23 +185,22 @@ void loop() {
   }
 
   // button-based mode selection
-  if ((digitalRead(leftBumper) == 0) && (toggle == false) && (robotState == 0))
+  if (CharliePlexM::ui_Btn)
   {
-    tempTimer = millis();
-    toggle = true;
+    if (bt_doOnce == false)
+    {
+      bt_doOnce = true;
+      robotStateIndex++;
+      robotStateIndex = robotStateIndex & 7;
+      threeSecondTimer = millis();
+      bt_3sTimeUp = false;
+      bt_calInitialized = false;
+      calCycle = 0;
+    }
   }
-  if ((digitalRead(leftBumper) == 1) && (toggle == true) && (robotState == 0))
+  else
   {
-    buttonHold = millis() - tempTimer;
-    toggle = false;
-    if (buttonHold < 2000) //tap to run or hold to callibrate
-    {
-      robotState = 1;
-    }
-    else
-    {
-      robotState = 2;
-    }
+    bt_doOnce = LOW;
   }
 
   // check if drive motors should be powered
@@ -190,12 +209,10 @@ void loop() {
   // modes
   // 0 = default after power up/reset
   // 1 = Press mode button once to enter. Run robot.
-  // 2 = Press mode button four times to enter. Calibrate motor speeds to drive straight.
-  switch (robotState)
+  // 4 = Press mode button four times to enter. Calibrate motor speeds to drive straight.
+  switch (robotStateIndex)
   {
     case 0:    //default state
-    frontRightEcho = ping(frontRightPing, frontRightData);
-    Serial.println(frontRightEcho);
       leftEcho = ping(leftPing, leftData);
       rightEcho = ping(rightPing, rightData);
       servo_leftMotor.writeMicroseconds(brake);
@@ -203,16 +220,17 @@ void loop() {
       servo_slideMotor.write(slideRetracted);
       encoder_leftMotor.zero();
       encoder_rightMotor.zero();
-      if (leftEcho > rightEcho)    //to determine the first turn at the start of each round (assuming the robot is starting on the same side as the charging station)
-      {
+      modeIndicatorIndex = 0;
+      /*if(leftEcho > rightEcho)    to determine the first turn at the start of each round (assuming the robot is starting on the same side as the charging station)
+        {
         turnFlag = false;
         startingTurn = false;
-      }
-      else
-      {
+        }
+        else
+        {
         turnFlag = true;
         startingTurn = true;
-      }
+        }*/
       break;
 
     case 1:    //run robot
@@ -221,26 +239,21 @@ void loop() {
         //set motor speeds
         leftMotorSpeed = constrain(forwardSpeed + leftMotorOffset, 1600, 2100);
         rightMotorSpeed = constrain(forwardSpeed + rightMotorOffset, 1600, 2100);
-        if (millis() - chargeTimer == 60000 && phaseA == 1) //test to find how long it takes to reach the charging station
+        if (millis() - chargeTimer == 70000) //test to find how long it takes to reach the charging station
         {
-          motorsEnabled = false;
-          leftEcho = ping(leftPing, leftData);
-          encoder_leftMotor.zero();
-          encoder_rightMotor.zero();
           phaseA = 3;
         }
-        //rightInfra = digitalRead(rightLightSensor);
-        //Serial.println(rightInfra);       
-        //Serial.println(turnFlag);
         switch (phaseA)
         {
           case 1:
-            driveStraight();
+            frontLeftEcho = ping(frontLeftPing, frontLeftData);
+            frontRightEcho = ping(frontRightPing, frontRightData);
             break;
           case 2:
             uTurn(turnFlag);
             break;
           case 3:
+            infra = analogRead(lightSensor);
             findBeacon();
             break;
           case 4:
@@ -258,10 +271,12 @@ void loop() {
           servo_leftMotor.writeMicroseconds(brake);
           servo_rightMotor.writeMicroseconds(brake);
         }
+        modeIndicatorIndex = 1;
       }
       break;
 
-    case 2:    //calibrate motors
+    case 4:    //calibrate motors
+
       if (bt_3sTimeUp)
       {
         if (!bt_calInitialized)
@@ -291,93 +306,91 @@ void loop() {
             rightMotorOffset = (rightMotorPosition - leftMotorPosition) / 4;
             leftMotorOffset = 0;
           }
+
           EEPROM.write(rightMotorOffsetAddress_L, lowByte(rightMotorOffset));
           EEPROM.write(rightMotorOffsetAddress_H, highByte(rightMotorOffset));
           EEPROM.write(leftMotorOffsetAddress_L, lowByte(leftMotorOffset));
           EEPROM.write(leftMotorOffsetAddress_H, highByte(leftMotorOffset));
-          robotState = 0;    //go back to Mode 0
+
+          robotStateIndex = 0;    //go back to Mode 0
         }
+        modeIndicatorIndex = 4;
       }
       break;
   }
+
   if ((millis() - tempDisplayTime) > displayTime)
   {
     tempDisplayTime = millis();
+    bt_heartbeat = !bt_heartbeat;
+    CharliePlexM::Write(heartbeatLed, bt_heartbeat);
+    digitalWrite(13, bt_heartbeat);
+    indicator();
   }
 }
 
 
+// set mode indicator LED state
+void indicator() {
+  //display routine, if true turn on led
+  CharliePlexM::Write(indicatorLed, !(modeIndicator[modeIndicatorIndex] & (iArray[iArrayIndex])));
+  iArrayIndex++;
+  iArrayIndex = iArrayIndex & 15;
+}
+
+
+// measure distance to target using ultrasonic sensor
 unsigned long ping(const int p, const int d)
 {
+  //Ping Ultrasonic
+  //Send the Ultrasonic Range Finder a 10 microsecond pulse per tech spec
   digitalWrite(p, HIGH);
   delayMicroseconds(10);  //The 10 microsecond pause where the pulse in "high"
   digitalWrite(p, LOW);
+  //use command pulseIn to listen to Ultrasonic_Data pin to record the
+  //time that it takes from when the Pin goes HIGH until it goes LOW
   return pulseIn(d, HIGH, 10000);
+
+  // Print Sensor Readings
+#ifdef DEBUG_ULTRASONIC
+  Serial.print("Time (microseconds): ");
+  Serial.print(ul_Echo_Time, DEC);
+  Serial.print(", Inches: ");
+  Serial.print(ul_Echo_Time / 148); //divide time by 148 to get distance in inches
+  Serial.print(", cm: ");
+  Serial.println(ul_Echo_Time / 58); //divide time by 58 to get distance in cm
+#endif
 }
 
 
 void driveStraight() {
-  frontLeftEcho = ping(frontLeftPing, frontLeftData);
-  frontRightEcho = ping(frontRightPing, frontRightData);
-  if ((frontLeftEcho <= wallAllowance) && (frontRightEcho <= wallAllowance))  //wall was reached
+  if (frontLeftEcho <= turnStart && frontRightEcho <= turnStart)  //wall is reached
   {
-    leftEcho = ping(leftPing, leftData);
-    rightEcho = ping(rightPing, rightData);
     motorsEnabled = false;
-    if (((turnFlag == false) && (leftEcho < turnAllowance)) || (turnFlag == true && rightEcho < turnAllowance))  //check if there is space for a u-turn
-    {
-      obstacleFlag = true;
-      phaseC = 4;
-    }
     dumbCount++;
   }
-  /*if (((frontLeftEcho <= wallAllowance) && (frontRightEcho >= (wallAllowance + obstacleTolerance))) ||
-      ((frontLeftEcho <= (wallAllowance + obstacleTolerance)) && (frontRightEcho >= wallAllowance))) //obstacle was reached
-    {
-    obstacleFlag = true;
-    leftEcho = ping(leftPing, leftData);
-    rightEcho = ping(rightPing, rightData);
-    motorsEnabled = false;
-    dumbCount++;
-    if (((turnFlag == false) && (leftEcho < turnAllowance)) || ((turnFlag == true) && (rightEcho < turnAllowance)))  //check if there is another obstacle before turning
-    {
-      phaseC = 4;
-    }
-    }*/
-  if (dumbCount >= 100)
+  if (dumbCount >= 200)
   {
     encoder_leftMotor.zero();
     encoder_rightMotor.zero();
     dumbCount = 0;
-    if (obstacleFlag == true)
-    {
-      phaseA = 4;
-    }
-    else
-    {
-      phaseA = 2;
-    }
+    phaseA = 2;
   }
-  else  //correct if not straight
+  if ((frontLeftEcho <= turnStart && frontRightEcho >= turnStart * 4) || (frontLeftEcho <= turnStart * 4 && frontRightEcho >= turnStart)) //obstacle is reached
   {
-    if (encoder_leftMotor.getRawPosition() - encoder_rightMotor.getRawPosition() >= straightTolerance) //left motor is ahead
-    {
-      leftMotorSpeed = brake;
-      rightMotorSpeed = forwardSpeed;
-    }
-    if (encoder_rightMotor.getRawPosition() - encoder_leftMotor.getRawPosition() >= straightTolerance) //right motor is ahead
-    {
-      leftMotorSpeed = forwardSpeed;
-      rightMotorSpeed = brake;
-    }
-    else
-    {
-      leftMotorSpeed = forwardSpeed;
-      rightMotorSpeed = forwardSpeed;
-    }
+    motorsEnabled = false;
+    encoder_leftMotor.zero();
+    encoder_rightMotor.zero();
+    phaseA = 4;
+  }
+  else
+  {
+    leftMotorSpeed = forwardSpeed;
+    rightMotorSpeed = forwardSpeed;
     motorsEnabled = true;
   }
 }
+
 
 void uTurn(bool direction) {
   if (direction == false)  //left turn
@@ -388,8 +401,6 @@ void uTurn(bool direction) {
     if (encoder_rightMotor.getRawPosition() >= one80)
     {
       turnFlag = true;
-      encoder_leftMotor.zero();
-      encoder_rightMotor.zero();
       phaseA = 1;
     }
   }
@@ -401,149 +412,82 @@ void uTurn(bool direction) {
     if (encoder_leftMotor.getRawPosition() >= one80)
     {
       turnFlag = false;
-      encoder_leftMotor.zero();
-      encoder_rightMotor.zero();
-      if (phaseB == 3)
-      {
-        phaseB = 2;
-      }
-      else
-      {
-        phaseA = 1;
-      }
+      phaseA = 1;
     }
   }
 }
 
 
-void findBeacon() { //follow the perimeter of the room
+void findBeacon() {
   switch (phaseB)
   {
-    case 1: //rotate 90 degrees counter-clockwise
-      if (encoder_rightMotor.getRawPosition() >= ninety)
-      {
-        motorsEnabled = false;
-        phaseB = 2;
-      }
-      else
-      {
-        leftMotorSpeed = reverseSpeed;
-        rightMotorSpeed = forwardSpeed;
-        motorsEnabled = true;
-      }
-      break;
-    case 2: //check if the right IR sensor finds the beacon
-      frontLeftEcho = ping(frontLeftPing, frontLeftData);
-      frontRightEcho = ping(frontRightPing, frontRightData);
-      rightEcho = ping(rightPing, rightData);
-      rightInfra = digitalRead(rightLightSensor);
-      if ((frontLeftEcho <= beaconAllowance) || (frontRightEcho <= beaconAllowance))
-      {
-        motorsEnabled = false;
-        dumbCount++;
-      }
-      if (dumbCount > 50)
+    case 1: //stop driving and zero encoders
+      motorsEnabled = false;
+      encoder_leftMotor.zero();
+      encoder_rightMotor.zero();
+      phaseB = 2;
+    case 2: //rotate counter-clockwise > 360 degrees
+      leftMotorSpeed = brake;
+      rightMotorSpeed = forwardSlow;
+      motorsEnabled = true;
+      if (encoder_rightMotor.getRawPosition() >= three60)
       {
         encoder_leftMotor.zero();
         encoder_rightMotor.zero();
-        dumbCount = 0;
-        phaseB = 1;
+        phaseB = 3;
       }
-      /*if (rightEcho >= (beaconAllowance + wallTolerance)) //check if worth turning right
-        {
-        if (worthFlag == false)
-        {
-          worthFlag = true;
-          tempTimer = millis();
-        }
-        if (worthFlag == true && (millis() - tempTimer) >= 1000)
-        {
-          encoder_leftMotor.zero();
-          encoder_rightMotor.zero();
-          phaseB = 3;
-        }
-        }*/
-      if ((rightInfra == 0) || (analogRead(rightLightSensor) < 500)) //beacon was found
+      if (infra <= 500)
       {
         motorsEnabled = false;
         phaseB = 4;
       }
-      else
+    case 3: //look elsewhere
+      leftMotorSpeed = forwardSpeed;
+      rightMotorSpeed = forwardSpeed;
+      motorsEnabled = true;
+      if (encoder_leftMotor.getRawPosition() >= three60 && encoder_rightMotor.getRawPosition() >= three60)
       {
-        leftMotorSpeed = forwardSpeed;
-        rightMotorSpeed = forwardSpeed;
+        encoder_leftMotor.zero();
+        encoder_rightMotor.zero();
+        phaseB = 1;
+      }
+    case 4: //move towards beacon and adjust angle
+      if (infra > 500) //wiggle until back in sight
+      {
+        if (encoder_leftMotor.getRawPosition() < encoder_rightMotor.getRawPosition())
+        {
+          leftMotorSpeed = forwardSlow;
+          rightMotorSpeed = reverseSlow;
+        }
+        else
+        {
+          leftMotorSpeed = reverseSlow;
+          rightMotorSpeed = forwardSlow;
+        }
         motorsEnabled = true;
       }
-      break;
-    case 3:
-      if (encoder_leftMotor.getRawPosition() >= ninety)
+      if (digitalRead(bumper) == 0) //bumper was pressed
       {
         motorsEnabled = false;
-        phaseB = 2;
-      }
-      else
-      {
-        leftMotorSpeed = forwardSpeed;
-        rightMotorSpeed = brake;
-        motorsEnabled = true;
-        worthFlag = false;
-      }
-      break;
-    case 4: //rotate until the back IR sensor finds the beacon
-      backInfra = digitalRead(backLightSensor);
-      if ((backInfra == 0) || (analogRead(backLightSensor) < 500))
-      {
-        motorsEnabled = false;
+        tempTimer = millis();
         phaseB = 5;
       }
       else
       {
         leftMotorSpeed = reverseSpeed;
-        rightMotorSpeed = forwardSpeed;
+        rightMotorSpeed = reverseSpeed;
         motorsEnabled = true;
       }
-      break;
-    case 5: //move towards beacon
-      if ((digitalRead(leftBumper) == 0) && (digitalRead(rightBumper) == 0)) //both bumpers were pressed
-      {
-        motorsEnabled = false;
-        tempTimer = millis();
-        phaseB = 6;
-      }
-      else
-      {
-        if (digitalRead(leftBumper) == 0) //only left bumper was pressed
-        {
-          leftMotorSpeed = brake;
-          rightMotorSpeed = reverseSlow;
-        }
-        if (digitalRead(rightBumper) == 0)  //only right bumper was pressed
-        {
-          leftMotorSpeed = reverseSlow;
-          rightMotorSpeed = brake;
-        }
-        else
-        {
-          leftMotorSpeed = reverseSpeed;
-          rightMotorSpeed = reverseSpeed;
-        }
-        motorsEnabled = true;
-      }
-      break;
-    case 6:
+    case 5:
       servo_slideMotor.write(slideExtended);
       if (millis() - tempTimer >= 5000) //allow time for the slide to raise and the parts to fall
       {
-        servo_slideMotor.write(slideRetracted);
-        if (secondRound == false)
-        {
-          turnFlag = startingTurn;
-          secondRound = true;
-          phaseB = 1;
-          phaseA = 1;
-        }
+        encoder_leftMotor.zero();
+        encoder_rightMotor.zero();
+        turnFlag = startingTurn;
+        phaseB = 1;
+        phaseA = 1;
       }
-      break;
   }
 }
 
@@ -578,7 +522,6 @@ void obstacleAvoidance() {
           phaseC = 2;
         }
       }
-      break;
     case 2: //drive forward a bit
       leftMotorSpeed = forwardSpeed;
       rightMotorSpeed = forwardSpeed;
@@ -592,7 +535,6 @@ void obstacleAvoidance() {
         encoder_rightMotor.zero();
         phaseC = 3;
       }
-      break;
     case 3: //turn towards the side with the greater distance
       if (turnFlag == false)
       {
@@ -620,53 +562,27 @@ void obstacleAvoidance() {
         {
           leftMotorSpeed = forwardSpeed;
           rightMotorSpeed = reverseSpeed;
-          turnFlag = false;  //a u-turn has just been performed
+          turnFlag = true;  //a u-turn has just been performed
         }
         motorsEnabled = true;
       }
       if (encoder_leftMotor.getRawPosition() >= ninety || encoder_rightMotor.getRawPosition() >= ninety)
       {
-        obstacleFlag = false;
         motorsEnabled = false;
         phaseC = 1;
         phaseA = 1;
       }
-      break;
-    case 4: //wall was reached and there is no space for a u-turn so reverse until there is space
-      leftEcho = ping(leftPing, leftData);
-      rightEcho = ping(rightPing, rightData);
-      if (turnFlag == false)
-      {
-        if (leftEcho < turnAllowance)
-        {
-          leftMotorSpeed = reverseSpeed;
-          rightMotorSpeed = reverseSpeed;
-          motorsEnabled = true;
-        }
-        else
-        {
-          motorsEnabled = false;
-          encoder_leftMotor.zero();
-          encoder_rightMotor.zero();
-          phaseC = 1;
-        }
-      }
-      else
-      {
-        if (rightEcho < turnAllowance)
-        {
-          leftMotorSpeed = reverseSpeed;
-          rightMotorSpeed = reverseSpeed;
-          motorsEnabled = true;
-        }
-        else
-        {
-          motorsEnabled = false;
-          encoder_leftMotor.zero();
-          encoder_rightMotor.zero();
-          phaseC = 1;
-        }
-      }
-      break;
+  }
+}
+
+
+void driveCorrection() {
+  if(encoder_leftMotor.getRawPosition() - encoder_rightMotor.getRawPosition() >= straightnessTolerance)  //left motor is ahead
+  {
+    leftMotorSpeed = brake;
+  }
+  if(encoder_rightMotor.getRawPosition() - encoder_leftMotor.getRawPosition() >= straightnessTolerance)  //right motor is ahead
+  {
+    rightMotorSpeed = brake;
   }
 }
